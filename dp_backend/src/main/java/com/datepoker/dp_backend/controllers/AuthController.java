@@ -1,12 +1,13 @@
 package com.datepoker.dp_backend.controllers;
+
 import com.datepoker.dp_backend.DTO.ApiError;
 import com.datepoker.dp_backend.DTO.ApiResponse;
+import com.datepoker.dp_backend.DTO.EncryptionRequest;
 import com.datepoker.dp_backend.DTO.RegisterRequest;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.logger.LOGGER;
 import com.datepoker.dp_backend.services.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,32 +15,29 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
     private final AuthService authService;
+    private final ObjectMapper objectMapper;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, ObjectMapper objectMapper) {
         this.authService = authService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<?>> register(@RequestBody String encryptedPayload) {
+    public ResponseEntity<ApiResponse<?>> register(@RequestBody EncryptionRequest request) {
         try {
-            String decryptedJson = AESEncryptionUtil.decrypt(encryptedPayload);
-            RegisterRequest request = new ObjectMapper().readValue(decryptedJson, RegisterRequest.class);
+            String decryptedJson = AESEncryptionUtil.decrypt(request.getPayload().asText());
 
-            LOGGER.info("New (encrypted) registration request for {}", request.getEmail());
+            RegisterRequest registerRequest = objectMapper.readValue(decryptedJson, RegisterRequest.class);
 
-            String responseMessage = authService.registerUser(request);
+            LOGGER.info("New (encrypted) registration request for {}", registerRequest.getEmail());
+
+            String responseMessage = authService.registerUser(registerRequest);
             return ResponseEntity.ok(ApiResponse.success(responseMessage, null));
 
-        } catch (RuntimeException e) {
-            LOGGER.error("Registration failed: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error("Registration failed", new ApiError(400, "Bad Request", e.getMessage())));
         } catch (Exception e) {
-            LOGGER.error("Decryption or processing failed: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Internal Server Error", new ApiError(500, "Server Error", e.getMessage())));
+            LOGGER.error("Registration failed: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Registration failed", new ApiError(400, "Bad Request", e.getMessage())));
         }
     }
-
 }
-
