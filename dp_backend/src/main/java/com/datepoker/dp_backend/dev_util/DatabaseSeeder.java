@@ -2,6 +2,7 @@ package com.datepoker.dp_backend.dev_util;
 import com.datepoker.dp_backend.entities.Role;
 import com.datepoker.dp_backend.entities.User;
 import com.datepoker.dp_backend.enums.RoleName;
+import com.datepoker.dp_backend.logger.LOGGER;
 import com.datepoker.dp_backend.repositories.RoleRepository;
 import com.datepoker.dp_backend.repositories.UserRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -25,6 +26,8 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        LOGGER.info("🚀 Starting Database Seeder...");
+
         // ✅ Ensure roles exist
         if (roleRepository.count() == 0) {
             roleRepository.saveAll(List.of(
@@ -32,10 +35,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                     new Role(RoleName.ROLE_PREMIUM),
                     new Role(RoleName.ROLE_ADMIN)
             ));
-            System.out.println("✅ Roles added to the database!");
+            LOGGER.info("Roles added to the database!");
+        } else {
+            LOGGER.info("Roles already exist, skipping role seeding.");
         }
 
-        // ✅ Add test users only if they don't exist
+        // ✅ Add test users if they don’t exist
         if (userRepository.count() == 0) {
             Role userRole = roleRepository.findByName(RoleName.ROLE_USER).orElseThrow();
             Role premiumRole = roleRepository.findByName(RoleName.ROLE_PREMIUM).orElseThrow();
@@ -52,7 +57,9 @@ public class DatabaseSeeder implements CommandLineRunner {
 
             userRepository.saveAll(List.of(normalUser, premiumUser, adminUser));
 
-            System.out.println("✅ Test users added!");
+            LOGGER.info("Test users added!");
+        } else {
+            LOGGER.info("Users already exist, skipping user seeding.");
         }
     }
 }
