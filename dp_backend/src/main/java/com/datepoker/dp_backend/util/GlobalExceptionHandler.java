@@ -1,6 +1,7 @@
 package com.datepoker.dp_backend.util;
 import com.datepoker.dp_backend.DTO.ApiError;
 import com.datepoker.dp_backend.DTO.ApiResponse;
+import com.datepoker.dp_backend.exceptions.AuthenticationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +20,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleGeneralException(Exception ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Internal Server Error", new ApiError(500, "Server Error", ex.getMessage())));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<String>> handleAuthenticationException(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Authentication failed", new ApiError(401, "Unauthorized", ex.getMessage())));
     }
 }
 

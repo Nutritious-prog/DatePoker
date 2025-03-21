@@ -1,15 +1,14 @@
 package com.datepoker.dp_backend.controllers;
 
-import com.datepoker.dp_backend.DTO.ApiError;
-import com.datepoker.dp_backend.DTO.ApiResponse;
-import com.datepoker.dp_backend.DTO.EncryptionRequest;
-import com.datepoker.dp_backend.DTO.RegisterRequest;
+import com.datepoker.dp_backend.DTO.*;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.logger.LOGGER;
 import com.datepoker.dp_backend.services.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -39,5 +38,11 @@ public class AuthController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Registration failed", new ApiError(400, "Bad Request", e.getMessage())));
         }
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse response = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 }
