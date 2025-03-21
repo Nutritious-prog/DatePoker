@@ -2,6 +2,7 @@ package com.datepoker.dp_backend.services;
 import com.datepoker.dp_backend.DTO.LoginRequest;
 import com.datepoker.dp_backend.DTO.LoginResponse;
 import com.datepoker.dp_backend.DTO.RegisterRequest;
+import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.entities.Role;
 import com.datepoker.dp_backend.entities.User;
 import com.datepoker.dp_backend.enums.RoleName;
@@ -53,17 +54,22 @@ public class AuthService {
         return "User registered successfully!";
     }
 
+
     public LoginResponse login(LoginRequest request) {
         Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
 
-        if (userOptional.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOptional.get().getPassword())) {
+        if (userOptional.isEmpty() ||
+                !passwordEncoder.matches(request.getPassword(), userOptional.get().getPassword())) {
             throw new AuthenticationException("Invalid email or password");
         }
 
-        // Generate JWT Token
+        // 🔑 Generate JWT Token
         String token = jwtUtil.generateToken(userOptional.get().getEmail());
 
-        return new LoginResponse("Login successful", token);
+        // 🔐 Encrypt the token before sending it back
+        String encryptedToken = AESEncryptionUtil.encrypt(token);
+
+        return new LoginResponse("Login successful", encryptedToken);
     }
 }
 

@@ -41,8 +41,23 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse response = authService.login(request);
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody EncryptionRequest request) {
+        try {
+            // 🔓 Decrypt the encrypted request payload
+            String decryptedJson = AESEncryptionUtil.decrypt(request.getPayload().asText());
+
+            // 🧾 Convert decrypted JSON string into LoginRequest
+            LoginRequest loginRequest = objectMapper.readValue(decryptedJson, LoginRequest.class);
+
+            LoginResponse response = authService.login(loginRequest);
+            return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.error("Login failed", new ApiError(400, "Bad Request", e.getMessage()))
+            );
+        }
     }
+
+
 }
