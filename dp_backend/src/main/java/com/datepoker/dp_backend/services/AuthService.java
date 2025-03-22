@@ -27,17 +27,21 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private final MailService mailService;
+    private final UserProfileService userProfileService;
+
+    private final ObjectMapper objectMapper;
     private final JwtUtil jwtUtil;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final MailService mailService;
-    private final ObjectMapper objectMapper;
 
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, MailService mailService, ObjectMapper objectMapper) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, MailService mailService, UserProfileService userProfileService, ObjectMapper objectMapper) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.mailService = mailService;
+        this.userProfileService = userProfileService;
         this.objectMapper = objectMapper;
     }
 
@@ -64,7 +68,7 @@ public class AuthService {
 
         userRepository.save(newUser);
         mailService.sendActivationEmail(newUser.getEmail(), newUser.getName(), activationCode);
-
+        userProfileService.createProfileIfNotExists(newUser);
 
         LOGGER.info("User {} registered successfully!", request.getEmail());
         return "User registered successfully!";

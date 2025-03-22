@@ -49,5 +49,23 @@ public class CryptoController {
                     .body(ApiResponse.<JsonNode>error("Decryption failed", new ApiError(400, "Decryption Error", e.getMessage())));
         }
     }
+
+    @PostMapping("/decrypt_JWT")
+    public ResponseEntity<ApiResponse<String>> decryptJWT(@RequestBody EncryptionRequest request) {
+        try {
+            String encrypted = request.getPayload().asText();
+            String decrypted = AESEncryptionUtil.decrypt(encrypted); // 🔐 This is a plain JWT string
+
+            // ✅ Do NOT try to parse it with Jackson — it’s not JSON
+            return ResponseEntity.ok(ApiResponse.success("Decryption successful", decrypted));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.error("Decryption failed",
+                            new ApiError(400, "Decryption Error", e.getMessage()))
+            );
+        }
+    }
+
 }
 

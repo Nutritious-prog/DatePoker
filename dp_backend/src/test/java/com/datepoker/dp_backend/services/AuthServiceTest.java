@@ -39,6 +39,8 @@ class AuthServiceTest {
     @Mock
     private MailService mailService;
 
+    @Mock
+    private UserProfileService userProfileService;
 
     @Mock
     private JwtUtil jwtUtil;
@@ -404,5 +406,24 @@ class AuthServiceTest {
 
         assertEquals("Reset code expired", ex.getMessage());
     }
+
+    @Test
+    void registerUser_createsProfileAfterRegistration() {
+        String email = "john@example.com";
+        String password = "Secret123";
+        RegisterRequest request = new RegisterRequest("John", email, password);
+
+        Role role = new Role(RoleName.ROLE_USER);
+        when(roleRepository.findByName(RoleName.ROLE_USER)).thenReturn(Optional.of(role));
+        when(userRepository.existsByEmail(email)).thenReturn(false);
+        when(passwordEncoder.encode(password)).thenReturn("hashedPass");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String result = authService.registerUser(request);
+
+        verify(userProfileService).createProfileIfNotExists(any(User.class));
+        assertEquals("User registered successfully!", result);
+    }
+
 
 }
