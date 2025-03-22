@@ -2,24 +2,38 @@ package com.datepoker.dp_backend.controllers;
 
 import com.datepoker.dp_backend.DTO.*;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
+import com.datepoker.dp_backend.entities.User;
 import com.datepoker.dp_backend.logger.LOGGER;
+import com.datepoker.dp_backend.repositories.UserRepository;
 import com.datepoker.dp_backend.services.AuthService;
+import com.datepoker.dp_backend.services.MailService;
+import com.datepoker.dp_backend.services.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
-    private final AuthService authService;
-    private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
-    public AuthController(AuthService authService, ObjectMapper objectMapper) {
+    private final AuthService authService;
+    private final MailService mailService;
+    private final ObjectMapper objectMapper;
+    private final PasswordEncoder passwordEncoder;
+
+    public AuthController(UserRepository userRepository, AuthService authService, MailService mailService, ObjectMapper objectMapper, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
         this.authService = authService;
+        this.mailService = mailService;
         this.objectMapper = objectMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/register")
@@ -68,28 +82,27 @@ public class AuthController {
 
     @PostMapping("/activate")
     public ResponseEntity<ApiResponse<String>> activateUser(@RequestBody EncryptionRequest request) {
-        try {
-            // 🔓 Decrypt payload
-            String encrypted = request.getPayload().asText(); // from JsonNode
-            String decryptedJson = AESEncryptionUtil.decrypt(encrypted);
-
-            // 📦 Convert decrypted JSON to ActivationRequest
-            ActivationRequest activationRequest = objectMapper.readValue(decryptedJson, ActivationRequest.class);
-
-            // ✅ Activate the user
-            String resultMessage = authService.activateUser(
-                    activationRequest.getEmail(),
-                    activationRequest.getCode()
-            );
-
-            return ResponseEntity.ok(ApiResponse.success("Account activated successfully!", resultMessage));
-        } catch (Exception e) {
-            LOGGER.error("Activation failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(
-                    ApiResponse.error("Activation failed",
-                            new ApiError(HttpStatus.BAD_REQUEST.value(), "Bad Request", e.getMessage()))
-            );
-        }
+        String result = authService.processEncryptedActivation(request);
+        return ResponseEntity.ok(ApiResponse.success("Account activated!", result));
     }
+
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestBody EncryptionRequest request) {
+        ForgotPasswordRequest decrypted = authService.decryptPayload(request.getPayload(), ForgotPasswordRequest.class);
+        String result = authService.processForgotPassword(decrypted);
+        return ResponseEntity.ok(ApiResponse.success("Reset code sent to email", result));
+    }
+
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<String>> resetPassword(@RequestBody EncryptionRequest request) {
+        ResetPasswordRequest decrypted = authService.decryptPayload(request.getPayload(), ResetPasswordRequest.class);
+        String result = authService.processResetPassword(decrypted);
+        return ResponseEntity.ok(ApiResponse.success("Password reset successful", result));
+    }
+
+
+
 
 }

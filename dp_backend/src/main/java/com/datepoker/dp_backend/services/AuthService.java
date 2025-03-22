@@ -1,8 +1,5 @@
 package com.datepoker.dp_backend.services;
-import com.datepoker.dp_backend.DTO.LoginRequest;
-import com.datepoker.dp_backend.DTO.LoginResponse;
-import com.datepoker.dp_backend.DTO.RegisterRequest;
-import com.datepoker.dp_backend.DTO.SocialAuthRequest;
+import com.datepoker.dp_backend.DTO.*;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.entities.Role;
 import com.datepoker.dp_backend.entities.User;
@@ -12,11 +9,15 @@ import com.datepoker.dp_backend.logger.LOGGER;
 import com.datepoker.dp_backend.repositories.RoleRepository;
 import com.datepoker.dp_backend.repositories.UserRepository;
 import com.datepoker.dp_backend.security.JwtUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
@@ -29,13 +30,15 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final RestTemplate restTemplate = new RestTemplate();
     private final MailService mailService;
+    private final ObjectMapper objectMapper;
 
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, MailService mailService) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, MailService mailService, ObjectMapper objectMapper) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.mailService = mailService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -151,5 +154,69 @@ public class AuthService {
 
         return (String) response.get("email");
     }
+
+    public String processEncryptedActivation(EncryptionRequest request) {
+        try {
+            String decryptedJson = AESEncryptionUtil.decrypt(request.getPayload().asText());
+            ActivationRequest activationRequest = objectMapper.readValue(decryptedJson, ActivationRequest.class);
+            return activateUser(activationRequest.getEmail(), activationRequest.getCode());
+        } catch (Exception e) {
+            throw new RuntimeException("Activation failed: " + e.getMessage(), e);
+        }
+    }
+
+    public String processForgotPassword(ForgotPasswordRequest request) {
+        String email = request.getEmail();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isActivated()) {
+            throw new IllegalStateException("Account not activated");
+        }
+
+        String code = String.format("%06d", new SecureRandom().nextInt(999999));
+        user.setResetCode(code);
+        user.setResetCodeExpiry(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+
+        mailService.sendPasswordResetEmail(email, code); // ✅ HTML email
+
+        return email;
+    }
+
+    public String processResetPassword(ResetPasswordRequest request) {
+        String email = request.getEmail();
+        String code = request.getCode();
+        String newPassword = request.getNewPassword();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.getResetCode() == null || !user.getResetCode().equals(code)) {
+            throw new IllegalArgumentException("Invalid reset code");
+        }
+
+        if (user.getResetCodeExpiry() == null || user.getResetCodeExpiry().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Reset code expired");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setResetCode(null);
+        user.setResetCodeExpiry(null);
+        userRepository.save(user);
+
+        return email;
+    }
+
+    public <T> T decryptPayload(JsonNode payload, Class<T> targetClass) {
+        try {
+            String decryptedJson = AESEncryptionUtil.decrypt(payload.asText());
+            return objectMapper.readValue(decryptedJson, targetClass);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to decrypt payload: " + e.getMessage(), e);
+        }
+    }
+
 }
 

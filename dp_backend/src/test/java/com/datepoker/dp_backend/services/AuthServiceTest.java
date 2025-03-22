@@ -1,7 +1,5 @@
 package com.datepoker.dp_backend.services;
-import com.datepoker.dp_backend.DTO.LoginRequest;
-import com.datepoker.dp_backend.DTO.LoginResponse;
-import com.datepoker.dp_backend.DTO.RegisterRequest;
+import com.datepoker.dp_backend.DTO.*;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.entities.Role;
 import com.datepoker.dp_backend.entities.User;
@@ -18,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -189,6 +188,221 @@ class AuthServiceTest {
         verify(userRepository, times(1)).findByEmail(email);
         verify(passwordEncoder, never()).matches(anyString(), anyString());
         verify(jwtUtil, never()).generateToken(anyString());
+    }
+
+    @Test
+    void testActivateUser_Success() {
+        String email = "john@example.com";
+        String code = "123456";
+
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(false);
+        user.setActivationCode(code);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        String result = authService.activateUser(email, code);
+
+        assertTrue(user.isActivated());
+        assertNull(user.getActivationCode());
+        assertEquals("Account for john@example.com successfully activated!", result);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void testActivateUser_InvalidCode_ThrowsException() {
+        String email = "john@example.com";
+
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(false);
+        user.setActivationCode("123456");
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        Exception ex = assertThrows(IllegalArgumentException.class,
+                () -> authService.activateUser(email, "wrong-code"));
+
+        assertEquals("Invalid activation code", ex.getMessage());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void testActivateUser_AlreadyActivated_ThrowsException() {
+        String email = "john@example.com";
+
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(true);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        Exception ex = assertThrows(IllegalStateException.class,
+                () -> authService.activateUser(email, "123456"));
+
+        assertEquals("Account already activated", ex.getMessage());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void testLogin_ActivatedUser_Success() {
+        String email = "john@example.com";
+        String password = "rawPass";
+        String hashedPassword = "hashedPass";
+        String jwt = "mock.jwt.token";
+
+        User user = new User();
+        user.setEmail(email);
+        user.setPassword(hashedPassword);
+        user.setActivated(true);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(password, hashedPassword)).thenReturn(true);
+        when(jwtUtil.generateToken(email)).thenReturn(jwt);
+
+        LoginRequest request = new LoginRequest(email, password);
+        LoginResponse response = authService.login(request);
+
+        assertNotNull(response);
+        assertEquals("Login successful", response.getMessage());
+
+        // 🔐 ensure the token is encrypted
+        assertNotEquals(jwt, response.getToken());
+        assertEquals(jwt, AESEncryptionUtil.decrypt(response.getToken()));
+    }
+
+    @Test
+    void testLogin_UserNotActivated_ThrowsException() {
+        String email = "john@example.com";
+        String rawPassword = "hashedPass"; // (raw password used in login request)
+
+        User user = new User();
+        user.setEmail(email);
+        user.setPassword(rawPassword); // mock stored hashed password
+        user.setActivated(false); // ❗️ Not activated
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(rawPassword, rawPassword)).thenReturn(true); // ✅ mock password match
+
+        LoginRequest request = new LoginRequest(email, rawPassword);
+
+        Exception ex = assertThrows(AuthenticationException.class,
+                () -> authService.login(request));
+
+        assertEquals("Account not activated. Please check your email.", ex.getMessage());
+    }
+
+    @Test
+    void testForgotPassword_Success() {
+        String email = "john@example.com";
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(true);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        doNothing().when(mailService).sendPasswordResetEmail(eq(email), anyString());
+
+        String result = authService.processForgotPassword(new ForgotPasswordRequest(email));
+
+        assertEquals(email, result);
+        assertNotNull(user.getResetCode());
+        assertNotNull(user.getResetCodeExpiry());
+        verify(userRepository).save(user);
+        verify(mailService).sendPasswordResetEmail(eq(email), anyString());
+    }
+
+    @Test
+    void testForgotPassword_UserNotFound() {
+        when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        Exception ex = assertThrows(IllegalArgumentException.class, () -> {
+            authService.processForgotPassword(new ForgotPasswordRequest("missing@example.com"));
+        });
+
+        assertEquals("User not found", ex.getMessage());
+    }
+
+    @Test
+    void testForgotPassword_UserNotActivated() {
+        String email = "notactivated@example.com";
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(false);
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        Exception ex = assertThrows(IllegalStateException.class, () -> {
+            authService.processForgotPassword(new ForgotPasswordRequest(email));
+        });
+
+        assertEquals("Account not activated", ex.getMessage());
+    }
+
+    @Test
+    void testResetPassword_Success() {
+        String email = "john@example.com";
+        String code = "123456";
+        String rawNewPassword = "newPass123";
+        String encodedPassword = "encodedPass123";
+
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(true);
+        user.setResetCode(code);
+        user.setResetCodeExpiry(LocalDateTime.now().plusMinutes(5));
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode(rawNewPassword)).thenReturn(encodedPassword);
+
+        ResetPasswordRequest req = new ResetPasswordRequest(email, code, rawNewPassword);
+        String result = authService.processResetPassword(req);
+
+        assertEquals(email, result);
+        assertNull(user.getResetCode());
+        assertNull(user.getResetCodeExpiry());
+        assertEquals(encodedPassword, user.getPassword());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void testResetPassword_InvalidCode() {
+        String email = "john@example.com";
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(true);
+        user.setResetCode("123456");
+        user.setResetCodeExpiry(LocalDateTime.now().plusMinutes(5));
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        ResetPasswordRequest req = new ResetPasswordRequest(email, "wrong-code", "newPass");
+
+        Exception ex = assertThrows(IllegalArgumentException.class, () -> {
+            authService.processResetPassword(req);
+        });
+
+        assertEquals("Invalid reset code", ex.getMessage());
+    }
+
+    @Test
+    void testResetPassword_ExpiredCode() {
+        String email = "john@example.com";
+        User user = new User();
+        user.setEmail(email);
+        user.setActivated(true);
+        user.setResetCode("123456");
+        user.setResetCodeExpiry(LocalDateTime.now().minusMinutes(1)); // expired
+
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+
+        ResetPasswordRequest req = new ResetPasswordRequest(email, "123456", "newPass");
+
+        Exception ex = assertThrows(IllegalArgumentException.class, () -> {
+            authService.processResetPassword(req);
+        });
+
+        assertEquals("Reset code expired", ex.getMessage());
     }
 
 }

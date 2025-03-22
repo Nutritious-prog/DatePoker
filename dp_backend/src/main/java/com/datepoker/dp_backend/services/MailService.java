@@ -23,7 +23,7 @@ public class MailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
 
             // Load template from resources
-            String htmlTemplate = loadEmailTemplate();
+            String htmlTemplate = loadEmailTemplate("templates/email/activation.html");
             String htmlContent = htmlTemplate
                     .replace("{{name}}", name)
                     .replace("{{code}}", code);
@@ -38,13 +38,37 @@ public class MailService {
         }
     }
 
-    private String loadEmailTemplate() throws IOException {
-        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("templates/email/activation.html");
+    private String loadEmailTemplate(String path) throws IOException {
+        InputStream inputStream = getClass().getClassLoader().getResourceAsStream(path);
         if (inputStream == null) {
-            throw new FileNotFoundException("Template not found: " + "templates/email/activation.html");
+            throw new FileNotFoundException("Template not found: " + path);
         }
         return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
     }
+
+    public void sendPasswordResetEmail(String toEmail, String code) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
+
+            String template = loadEmailTemplate("templates/email/password-reset.html");
+
+            // You can inject user name if you have it — for now just use email prefix
+            String name = toEmail.split("@")[0];
+            String html = template.replace("{{name}}", name)
+                    .replace("{{code}}", code);
+
+            helper.setTo(toEmail);
+            helper.setSubject("🔐 Reset your DatePoker password");
+            helper.setText(html, true);
+
+            mailSender.send(message);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send password reset email", e);
+        }
+    }
+
 }
 
 
