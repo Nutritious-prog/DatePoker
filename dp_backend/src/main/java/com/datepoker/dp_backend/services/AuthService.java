@@ -2,6 +2,7 @@ package com.datepoker.dp_backend.services;
 import com.datepoker.dp_backend.DTO.LoginRequest;
 import com.datepoker.dp_backend.DTO.LoginResponse;
 import com.datepoker.dp_backend.DTO.RegisterRequest;
+import com.datepoker.dp_backend.DTO.SocialAuthRequest;
 import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.entities.Role;
 import com.datepoker.dp_backend.entities.User;
@@ -14,7 +15,9 @@ import com.datepoker.dp_backend.security.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -23,6 +26,7 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
@@ -70,6 +74,47 @@ public class AuthService {
         String encryptedToken = AESEncryptionUtil.encrypt(token);
 
         return new LoginResponse("Login successful", encryptedToken);
+    }
+
+    public LoginResponse socialLogin(SocialAuthRequest request) {
+        String email = verifySocialToken(request.getProvider(), request.getToken());
+
+        // Register the user if they don't exist
+        User user = userRepository.findByEmail(email)
+                .orElseGet(() -> {
+                    User newUser = new User();
+                    newUser.setEmail(email);
+                    newUser.setPassword("SOCIAL_LOGIN"); // or random string
+                    return userRepository.save(newUser);
+                });
+
+        // 🧾 Generate regular JWT
+        String jwtToken = jwtUtil.generateToken(email);
+
+        // 🔐 Encrypt JWT before returning
+        String encryptedToken = AESEncryptionUtil.encrypt(jwtToken);
+
+        return new LoginResponse("Login successful", encryptedToken);
+    }
+
+
+    private String verifySocialToken(String provider, String token) {
+        String url;
+        if ("google".equalsIgnoreCase(provider)) {
+            url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + token;
+        } else if ("facebook".equalsIgnoreCase(provider)) {
+            url = "https://graph.facebook.com/me?access_token=" + token + "&fields=email";
+        } else {
+            throw new IllegalArgumentException("Unsupported provider: " + provider);
+        }
+
+        // Call Google or Facebook to verify token
+        Map response = restTemplate.getForObject(url, Map.class);
+        if (response == null || response.get("email") == null) {
+            throw new IllegalArgumentException("Invalid OAuth token");
+        }
+
+        return (String) response.get("email");
     }
 }
 
