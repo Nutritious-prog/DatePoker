@@ -19,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 @Service
 public class AuthService {
@@ -27,12 +28,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final RestTemplate restTemplate = new RestTemplate();
+    private final MailService mailService;
 
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, MailService mailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.mailService = mailService;
     }
 
     @Transactional
@@ -52,11 +55,38 @@ public class AuthService {
 
         User newUser = new User(request.getEmail(), encodedPassword, request.getName());
         newUser.addRole(userRole);
+        String activationCode = String.format("%06d", new Random().nextInt(999999));
+        newUser.setActivationCode(activationCode);
+        newUser.setActivated(false);
+
         userRepository.save(newUser);
+        mailService.sendActivationEmail(newUser.getEmail(), newUser.getName(), activationCode);
+
 
         LOGGER.info("User {} registered successfully!", request.getEmail());
         return "User registered successfully!";
     }
+
+    public String activateUser(String email, String code) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.isActivated()) {
+            throw new IllegalStateException("Account already activated");
+        }
+
+        if (!code.equals(user.getActivationCode())) {
+            throw new IllegalArgumentException("Invalid activation code");
+        }
+
+        user.setActivated(true);
+        user.setActivationCode(null);
+        userRepository.save(user);
+
+        return "Account for " + email + " successfully activated!";
+    }
+
+
 
 
     public LoginResponse login(LoginRequest request) {
@@ -66,6 +96,11 @@ public class AuthService {
                 !passwordEncoder.matches(request.getPassword(), userOptional.get().getPassword())) {
             throw new AuthenticationException("Invalid email or password");
         }
+
+        if (!userOptional.get().isActivated()) {
+            throw new AuthenticationException("Account not activated. Please check your email.");
+        }
+
 
         // 🔑 Generate JWT Token
         String token = jwtUtil.generateToken(userOptional.get().getEmail());

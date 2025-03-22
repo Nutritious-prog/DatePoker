@@ -38,6 +38,10 @@ class AuthServiceTest {
     private RoleRepository roleRepository;
 
     @Mock
+    private MailService mailService;
+
+
+    @Mock
     private JwtUtil jwtUtil;
 
     @BeforeEach
@@ -53,18 +57,23 @@ class AuthServiceTest {
         RegisterRequest mockRequest = new RegisterRequest("John Doe", email, password);
         User mockUser = new User("John Doe", email, "encodedPassword123");
 
-        Role mockRole = new Role(RoleName.ROLE_USER); // ✅ Ensure the role exists
-        when(roleRepository.findByName(RoleName.ROLE_USER)).thenReturn(Optional.of(mockRole)); // ✅ Mock role retrieval
-        when(userRepository.existsByEmail(email)).thenReturn(false); // Email doesn't exist
-        when(passwordEncoder.encode(password)).thenReturn("encodedPassword123"); // Mock password encoding
-        when(userRepository.save(any(User.class))).thenReturn(mockUser); // ✅ Return a User object
+        Role mockRole = new Role(RoleName.ROLE_USER);
+
+        when(roleRepository.findByName(RoleName.ROLE_USER)).thenReturn(Optional.of(mockRole));
+        when(userRepository.existsByEmail(email)).thenReturn(false);
+        when(passwordEncoder.encode(password)).thenReturn("encodedPassword123");
+        when(userRepository.save(any(User.class))).thenReturn(mockUser);
+
+        // We’re not testing the mail service, just verify it's called
+        doNothing().when(mailService).sendActivationEmail(eq(email), anyString(), anyString());
 
         // 🛠 Act
         String result = authService.registerUser(mockRequest);
 
         // ✅ Assert
         assertEquals("User registered successfully!", result);
-        verify(userRepository, times(1)).save(any(User.class)); // Ensure save is called once
+        verify(userRepository, times(1)).save(any(User.class));
+        verify(mailService, times(1)).sendActivationEmail(eq(email), anyString(), anyString());
     }
 
     @Test
@@ -100,6 +109,7 @@ class AuthServiceTest {
         User mockUser = new User();
         mockUser.setEmail(email);
         mockUser.setPassword(hashedPassword);
+        mockUser.setActivated(true);
 
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(mockUser));
         when(passwordEncoder.matches(rawPassword, hashedPassword)).thenReturn(true);
@@ -126,6 +136,7 @@ class AuthServiceTest {
         verify(passwordEncoder, times(1)).matches(rawPassword, hashedPassword);
         verify(jwtUtil, times(1)).generateToken(email);
     }
+
 
     @Test
     void testLogin_Failure_InvalidCredentials() {

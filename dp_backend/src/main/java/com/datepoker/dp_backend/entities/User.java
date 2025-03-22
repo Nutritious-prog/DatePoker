@@ -36,6 +36,12 @@ public class User {
     )
     private Set<Role> roles = new HashSet<>();
 
+    @Column(nullable = false)
+    private boolean isActivated = false;
+
+    @Column(length = 6)
+    private String activationCode;
+
     public User(String email, String password, String name) {
         this.email = email;
         this.password = password;

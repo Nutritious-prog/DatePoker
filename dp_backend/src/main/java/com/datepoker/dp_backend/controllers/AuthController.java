@@ -5,6 +5,7 @@ import com.datepoker.dp_backend.encryption.AESEncryptionUtil;
 import com.datepoker.dp_backend.logger.LOGGER;
 import com.datepoker.dp_backend.services.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -65,6 +66,30 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 
+    @PostMapping("/activate")
+    public ResponseEntity<ApiResponse<String>> activateUser(@RequestBody EncryptionRequest request) {
+        try {
+            // 🔓 Decrypt payload
+            String encrypted = request.getPayload().asText(); // from JsonNode
+            String decryptedJson = AESEncryptionUtil.decrypt(encrypted);
 
+            // 📦 Convert decrypted JSON to ActivationRequest
+            ActivationRequest activationRequest = objectMapper.readValue(decryptedJson, ActivationRequest.class);
+
+            // ✅ Activate the user
+            String resultMessage = authService.activateUser(
+                    activationRequest.getEmail(),
+                    activationRequest.getCode()
+            );
+
+            return ResponseEntity.ok(ApiResponse.success("Account activated successfully!", resultMessage));
+        } catch (Exception e) {
+            LOGGER.error("Activation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.error("Activation failed",
+                            new ApiError(HttpStatus.BAD_REQUEST.value(), "Bad Request", e.getMessage()))
+            );
+        }
+    }
 
 }
