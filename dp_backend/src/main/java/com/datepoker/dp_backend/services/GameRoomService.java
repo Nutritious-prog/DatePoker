@@ -57,6 +57,18 @@ public class GameRoomService {
             throw new IllegalStateException("Room already has a second player");
         }
 
+        if (room.getCreator().getId().equals(joinerUser.getProfile().getId())) {
+            throw new IllegalStateException("You cannot join your own room");
+        }
+
+        if (isUserInActiveRoom(joinerUser)) {
+            throw new IllegalStateException("You're already in an active room");
+        }
+
+        if (isUserInActiveRoom(room.getCreator().getUser())) {
+            throw new IllegalStateException("You already have an active room");
+        }
+
         UserProfile joinerProfile = userProfileRepository.findByUserId(joinerUser.getId())
                 .orElseThrow(() -> new IllegalStateException("User has no profile"));
 
@@ -89,4 +101,14 @@ public class GameRoomService {
         gameDateCardRepository.saveAll(gameDateCards);
         return gameRoomRepository.save(room);
     }
+
+    private boolean isUserInActiveRoom(User user) {
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalStateException("User profile not found"));
+
+        return gameRoomRepository.existsByCreatorAndIsActiveTrue(profile) ||
+                gameRoomRepository.existsByJoinerAndIsActiveTrue(profile);
+    }
+
+
 }
