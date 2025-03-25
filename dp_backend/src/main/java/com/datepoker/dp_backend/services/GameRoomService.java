@@ -2,14 +2,18 @@ package com.datepoker.dp_backend.services;
 
 import com.datepoker.dp_backend.entities.GameDateCard;
 import com.datepoker.dp_backend.entities.*;
+import com.datepoker.dp_backend.logic.RoundAnalyzer;
 import com.datepoker.dp_backend.repositories.*;
 import com.datepoker.dp_backend.util.GameCodeGenerator;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +27,9 @@ public class GameRoomService {
     private final FuzzyDateMatcher fuzzyDateMatcher;
     private final FeatureVectorService featureVectorService;
     private final GameDateCardRepository gameDateCardRepository;
+    private final UserDateRepository userDateRepository;
+    private final DateHistoryService dateHistoryService;
+
 
 
     public GameRoom createRoom(User hostUser, List<String> selectedOptions) {
@@ -111,4 +118,82 @@ public class GameRoomService {
     }
 
 
+    @Transactional
+    public GameRoom selectNewCardsForRoom(String code, User user) {
+        GameRoom room = gameRoomRepository.findByCode(code)
+                .orElseThrow(() -> new IllegalArgumentException("Room not found"));
+
+        // ✅ Authorization: only players in this room can trigger it
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow();
+        if (!profile.equals(room.getCreator()) && !profile.equals(room.getJoiner())) {
+            throw new IllegalStateException("You are not part of this room");
+        }
+
+        // ✅ Get already used cards
+        List<GameDateCard> allPlayed = gameDateCardRepository.findByGameRoom(room);
+        Set<Long> usedCardIds = allPlayed.stream()
+                .map(c -> c.getDateCard().getId())
+                .collect(Collectors.toSet());
+
+        // ✅ Fuzzy match against unused cards
+        double[] vector = room.getSettings().toFeatureVector();
+        List<DateCard> nextCards = dateCardRepository.findAll().stream()
+                .filter(card -> !usedCardIds.contains(card.getId()))
+                .map(card -> Map.entry(card, featureVectorService.getVector(card.getId())))
+                .filter(entry -> entry.getValue().size() == vector.length)
+                .sorted(Comparator.comparingDouble(entry ->
+                        fuzzyDateMatcher.euclideanDistance(vector, entry.getValue())))
+                .limit(5)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+        if (nextCards.isEmpty()) {
+            throw new IllegalStateException("No more new cards available");
+        }
+
+        // ✅ Create new GameDateCard entries
+        List<GameDateCard> gameCards = nextCards.stream()
+                .map(card -> GameDateCard.builder()
+                        .gameRoom(room)
+                        .dateCard(card)
+                        .status(GameDateCard.Status.UNDECIDED)
+                        .build())
+                .toList();
+
+        gameDateCardRepository.saveAll(gameCards);
+        room.getGameCards().addAll(gameCards);
+        return gameRoomRepository.save(room);
+    }
+
+    @Transactional
+    public GameRoom selectRandomWinner(String code, User user) {
+        GameRoom room = gameRoomRepository.findByCode(code)
+                .orElseThrow(() -> new IllegalArgumentException("Room not found"));
+
+        // ✅ Authorization check
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalStateException("User profile not found"));
+
+        if (!profile.equals(room.getCreator()) && !profile.equals(room.getJoiner())) {
+            throw new IllegalStateException("You are not part of this room");
+        }
+
+        // ✅ Analyze round
+        List<GameDateCard> cards = gameDateCardRepository.findByGameRoom(room);
+        RoundAnalyzer analyzer = new RoundAnalyzer(cards);
+
+        GameDateCard winner = analyzer.getRandomAcceptedCard();
+        if (winner == null) {
+            throw new IllegalStateException("No accepted cards to choose from.");
+        }
+
+        room.setAcceptedCardId(winner.getDateCard().getId());
+        room.setStatus(GameRoom.Status.FINISHED);
+        room.setActive(false);
+
+        dateHistoryService.saveForRoom(room, winner.getDateCard());
+
+        return gameRoomRepository.save(room);
+    }
 }

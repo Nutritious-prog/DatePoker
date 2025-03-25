@@ -32,5 +32,12 @@ public class UserProfile {
 
     @Column(name = "email")
     private String email;
+
+    public UserProfile(String displayName, String profilePictureUrl, User user, String email) {
+        this.displayName = displayName;
+        this.profilePictureUrl = profilePictureUrl;
+        this.user = user;
+        this.email = email;
+    }
 }
 

@@ -46,4 +46,21 @@ public class GameRoomController {
         }
     }
 
+    @PostMapping("/select-new-cards")
+    public ResponseEntity<?> selectNewCards(
+            @RequestBody DifferentCardsSelectionRoundRequest request,
+            @CurrentUser User user
+    ) {
+        GameRoom updatedRoom = gameRoomService.selectNewCardsForRoom(request.roomCode(), user);
+        return ResponseEntity.ok(GameRoomResponse.from(updatedRoom));
+    }
+
+    @PostMapping("/choose-random-winner")
+    public ResponseEntity<?> chooseRandomWinner(
+            @RequestBody JoinRoomRequest request,
+            @CurrentUser User user
+    ) {
+        GameRoom room = gameRoomService.selectRandomWinner(request.code(), user);
+        return ResponseEntity.ok(GameRoomResponse.from(room));
+    }
 }

@@ -1,10 +1,12 @@
 package com.datepoker.dp_backend.controllers;
 
+import com.datepoker.dp_backend.DTO.UserDateResponse;
 import com.datepoker.dp_backend.annotations.CurrentUser;
 import com.datepoker.dp_backend.DTO.ApiResponse;
 import com.datepoker.dp_backend.DTO.UserProfileResponse;
 import com.datepoker.dp_backend.DTO.UserProfileUpdateRequest;
 import com.datepoker.dp_backend.entities.User;
+import com.datepoker.dp_backend.services.DateHistoryService;
 import com.datepoker.dp_backend.services.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/profile")
@@ -20,6 +23,7 @@ import javax.validation.Valid;
 public class UserProfileController {
 
     private final UserProfileService profileService;
+    private final DateHistoryService dateHistoryService;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getProfile(@CurrentUser User currentUser) {
@@ -50,5 +54,12 @@ public class UserProfileController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth == null ? "No auth" : auth.getName();
     }
+
+    @GetMapping("/dates-history")
+    public ResponseEntity<ApiResponse<List<UserDateResponse>>> getDateHistory(@CurrentUser User user) {
+        List<UserDateResponse> history = dateHistoryService.getUserHistory(user);
+        return ResponseEntity.ok(ApiResponse.success("Date history loaded", history));
+    }
+
 
 }
