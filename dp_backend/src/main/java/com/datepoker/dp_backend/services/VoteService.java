@@ -34,6 +34,9 @@ public class VoteService {
         checkForDuplicateVote(profile, card);
         saveVote(profile, card, value);
 
+        // ✅ Set last activity on vote
+        updateGameRoomActivity(card.getGameRoom());
+
         updateCardStatusIfBothVoted(card);
         checkAndFinalizeRound(card.getGameRoom());
 
@@ -45,6 +48,7 @@ public class VoteService {
 
         return VoteResultResponse.of(card, card.getGameRoom(), allVoted, noAccepted);
     }
+
 
     private UserProfile getUserProfile(User user) {
         return userProfileRepository.findByUserId(user.getId())
@@ -102,6 +106,10 @@ public class VoteService {
         // Else → multiple or none → frontend decides: draw again or choose random
     }
 
+    private void updateGameRoomActivity(GameRoom room) {
+        room.setLastActivity(java.time.LocalDateTime.now());
+        gameRoomRepository.save(room);
+    }
 
 
 }

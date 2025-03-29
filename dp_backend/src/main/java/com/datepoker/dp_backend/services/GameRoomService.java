@@ -48,6 +48,8 @@ public class GameRoomService {
                 .isActive(true)
                 .build();
 
+        room.setLastActivity(LocalDateTime.now());
+
         return gameRoomRepository.save(room);
     }
 
@@ -106,6 +108,7 @@ public class GameRoomService {
         room.setActive(true);
 
         gameDateCardRepository.saveAll(gameDateCards);
+        room.setLastActivity(LocalDateTime.now());
         return gameRoomRepository.save(room);
     }
 
@@ -163,6 +166,7 @@ public class GameRoomService {
 
         gameDateCardRepository.saveAll(gameCards);
         room.getGameCards().addAll(gameCards);
+        room.setLastActivity(LocalDateTime.now());
         return gameRoomRepository.save(room);
     }
 
@@ -193,7 +197,25 @@ public class GameRoomService {
         room.setActive(false);
 
         dateHistoryService.saveForRoom(room, winner.getDateCard());
-
+        room.setLastActivity(LocalDateTime.now());
         return gameRoomRepository.save(room);
     }
+
+    public void leaveGame(User user) {
+        UserProfile profile = userProfileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalStateException("Profile not found"));
+
+        GameRoom room = gameRoomRepository.findActiveRoomByUser(profile)
+                .orElseThrow(() -> new IllegalStateException("No active game"));
+
+        room.setActive(false);
+        room.setStatus(GameRoom.Status.CANCELLED);
+        room.setDisconnected(true);
+        room.setDisconnectionReason(GameRoom.DisconnectionReason.USER_LEFT);
+
+        gameRoomRepository.save(room);
+    }
+
+
+
 }

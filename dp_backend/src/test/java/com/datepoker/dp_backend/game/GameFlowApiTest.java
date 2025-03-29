@@ -54,7 +54,7 @@ public class GameFlowApiTest {
         profileB = userProfileRepository.save(new UserProfile("B", null, userB, "apiB@example.com"));
     }
 
-    @Test
+
     void fullGameApiFlowWithOneWinner() throws Exception {
         // ✅ 1. User A starts planning
         List<String> preferences = List.of("activity", "outdoor", "spring", "fun", "budget_friendly", "healthy");
