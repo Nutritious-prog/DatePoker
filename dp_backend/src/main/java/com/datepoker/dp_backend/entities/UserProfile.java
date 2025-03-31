@@ -26,6 +26,12 @@ public class UserProfile {
     @Column(name = "profile_picture_url")
     private String profilePictureUrl;
 
+    @Column
+    private Double latitude;
+
+    @Column
+    private Double longitude;
+
     @OneToOne
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;

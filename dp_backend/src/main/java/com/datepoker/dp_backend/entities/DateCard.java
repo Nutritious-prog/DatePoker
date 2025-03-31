@@ -23,6 +23,9 @@ public class DateCard {
 
     private String location;
 
+    //here the info for google places API is stored
+    private String attractionPlaceType;
+
     private String priceLevel; // $, $$, $$$
 
     @Enumerated(EnumType.STRING)
@@ -46,6 +49,16 @@ public class DateCard {
 
     public enum Category {
         FOOD_DRINKS, ACTIVITY, CHILL, OTHER
+    }
+
+    public DateCard(String title, String imageUrl, String location, String attractionPlaceType, String priceLevel, Category category, List<FeatureVector> featureVector) {
+        this.title = title;
+        this.imageUrl = imageUrl;
+        this.location = location;
+        this.attractionPlaceType = attractionPlaceType;
+        this.priceLevel = priceLevel;
+        this.category = category;
+        this.featureVector = featureVector;
     }
 }
 
