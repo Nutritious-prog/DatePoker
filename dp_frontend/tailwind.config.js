@@ -28,7 +28,7 @@ module.exports = {
           300: "#191D31",    // Darkest text
         },
         danger: "#F75555",   // You can keep this for errors or alerts
-        background: "#FF33660A"
+        background: "#FF33661A"
       },
     },
   },

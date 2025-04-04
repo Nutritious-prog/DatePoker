@@ -32,6 +32,7 @@ import wifi from "@/assets/icons/wifi.png";
 import location from "@/assets/icons/location.png";
 import edit from "@/assets/icons/edit.png";
 import envelope from "@/assets/icons/envelope.png";
+import heart_b from "@/assets/icons/heart_black.png"
 
 export default {
   google,
@@ -68,4 +69,5 @@ export default {
   location,
   edit,
   envelope,
+  heart_b,
 };

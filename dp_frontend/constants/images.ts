@@ -8,6 +8,7 @@ import whiteGradient from "@/assets/images/white-gradient.png";
 import map from "@/assets/images/map.png";
 import noResult from "@/assets/images/no-result.png";
 import signInCouples from "@/assets/images/sign_in_bg.png";
+import homeCouple from "@/assets/images/home_couple.png";
 
 export default {
   onboarding,
@@ -19,5 +20,6 @@ export default {
   whiteGradient,
   map,
   noResult,
-  signInCouples
+  signInCouples,
+  homeCouple
 };

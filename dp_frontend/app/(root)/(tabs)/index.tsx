@@ -15,11 +15,11 @@ export default function Index() {
         <Text className="font-bold text-3xl my-5 font-rubik"> Welcome to ReState</Text>
 
         <Link href="/sign-in">Sign In</Link>
-        <Link href="/explore">Explore</Link>
+        <Link href="/mail-login">Mail login</Link>
+        <Link href="/mail-register">Mail register</Link>
+        <Link href="/reset-password">Reset Password</Link>
+        <Link href="/home">Home</Link>
         <Link href="/profile">Profile</Link>
-        <Link href={{ pathname: "/properties/[id]", params: { id: propertyId } }}>
-            Property
-        </Link>
 
     </View>
   );
